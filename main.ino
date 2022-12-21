@@ -7,9 +7,9 @@ internalregister
 
 released under mit 
 
-this is the source code for the flatpack synthizer based on the ay-3-8910 (datasheet: https://github.com/nickbild/ay-3-8910/blob/main/docs/AY-3-8910-datasheet.pdf) t
+this is the source code for the flatpack synthizer based on the ay-3-8910 (datasheet: https://github.com/nickbild/ay-3-8910/blob/main/docs/AY-3-8910-datasheet.pdf) 
 
-his code supports:
+this code supports:
 * drum sounds
 * adsr control
 * envlope control
@@ -36,30 +36,59 @@ this allows control to be very simple since it it all function based
 const int RESET_PIN = 8;
 const int BC1_PIN = A5;
 const int BDIR_PIN = A4;
-// const int bpm  =  60; //change for different bpm!
-// const int blen  = bpm/60 * 1000; //lenght in ms of each beat
-/* 
-the code here is used as the basic systems for writing to registers and creating/ writing notes all are mostly self explanitory but
-it is worth noting that the tp, period, fine, and coarse functions are all used to create the notes this is done through some basic algebra that can be found in the docs for the ay
 
+/* this code block handels all input systems 
+there are 3 main input blocks:
+   the first is the keyboard which is interfaced via the mcp23071
+   the second is the mode button which sets the mode of the keyboard either settings or playing in playing it acts like normal keyboard in settings the keyboard mode can be 
+   set according to the chart below keep in mind for settings mode once a setting is set it goes back to playing mode 
+  function|c1,c2,c3,c4,c5,c6,c7,sqr,tri,stri,saw,isaw,up,dw,ssaw,rssaw,noise, adsr|
+      key#|0, 1, 2, 3, 4, 5, 6,  7,  8,  9,  10,  11, 12,13, 14,  15,   16,    17,| 19-24 undefined
+  on playing mode the keys correlate to notes with key 0 being  c and key 24 being c theirfore is spans two octaves with bass c at bottom high c at top and middle c in middle 
+  the octave control can be set what ocative middle c is.
+  the third system is the attack decay sustain and release knobs these are used to set what the keyboard adsr does
 
 */
 
-int tp(int freq){// turns freq into tone period 
+// each key is +1 half step above the last and each from c0 to c8 are stored here as bools theirfor notes can be found by doing octave * 12 + steps above 
+//array of notes spanning from c0 to b8 
+ double key_values[] = {  16.35, 17.32, 18.35, 19.45, 20.6, 21.83, 23.12, 24.5, 25.96, 27.5, 29.14, 30.87, 32.7, 34.65, 36.71, 38.89, 41.2, 43.65, 
+ 46.25, 49.0, 51.91, 55.0, 58.27, 61.74, 65.41, 69.3, 73.42, 77.78, 82.41, 87.31, 92.5, 98.0, 103.83, 110.0, 116.54, 123.47, 130.81, 138.59, 146.83, 
+ 155.56, 164.81, 174.61, 185.0, 196.0, 207.65, 220.0, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.0, 415.3, 440.0, 466.16, 
+ 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61, 880.0, 932.33, 987.77, 1046.5, 1108.73, 1174.66, 1244.51, 1318.51, 1396.91,
+  1479.98, 1567.98, 1661.22, 1760.0, 1864.66, 1975.53, 2093.0, 2217.46, 2349.32, 2489.02, 2637.02, 2793.83, 2959.96, 3135.96, 3322.44, 3520.0, 3729.31, 3951.07,
+   4186.01, 4434.92, 4698.63, 4978.03, 5274.04, 5587.65, 5919.91, 6271.93, 6644.88, 7040.0, 7458.62, 7902.13};
+
+ 
+
+
+
+
+
+
+
+/*the code here is used as the basic systems for writing to registers and creating/ writing notes all are mostly self explanitory but
+it is worth noting that the tp, period, fine, and coarse functions are all used to create the notes this is done through some basic algebra that can be found in the docs for the ay
+
+*/
+
+
+
+double tp(double freq){// turns freq into tone period 
 return 2000000/(16*freq);
 
 
 }
 int env_period(double freq){ //envlope period
-  return 2000000/(256*freq);
+  return (int)2000000/(256*freq);
 
 }
-int coarse(int freq){ //calculates coarse tone value 
+int coarse(double freq){ //calculates coarse tone value 
   return (int)tp(freq) / 256;
 }
 
-int fine(int freq){ // calculates  fine tone value 
-return tp(freq) - (256 - coarse(freq));
+int fine(double freq){ // calculates  fine tone value 
+return (int)tp(freq) - (256 - coarse(freq));
 
 }
 
@@ -126,7 +155,7 @@ write_register(12, env_coarse(freq));
 
 
 
-void play_a(int freq){ // plays a given note on channel a 
+void play_a(double freq){ // plays a given note on channel a 
 
  write_register(0, fine(freq));
 write_register(1, coarse(freq));  
@@ -243,10 +272,12 @@ break;
 this block of wonderous code is the adsr functions for controlling amplitude they take 2-3 params that are used to generate their amplitude change 
 the level keyword sets the maximum level of the the function, the steps controls how long each step is normally the size of a step would be controlled but since integers cannot be used here
 instead the length of each is used
+
 and finally the level of the previous function is needed to set the the starting point this is not present on the attack because it is the start of the entire adsr 
 the release function ends once the value of it reaches 0 or its min value
 * the steps is in ms 
 * all values are 4 bit ints and thus have a cap of 15
+
 
 basic use is:
   adsr_mode();
@@ -333,6 +364,8 @@ for (int i = sustain_level; i>level; i--){
 }
 }
 void setup() {
+  
+
     pinMode(14, INPUT_PULLUP);
     pinMode(15, INPUT_PULLUP);
     pinMode(16, INPUT_PULLUP);
@@ -346,6 +379,7 @@ void setup() {
   pinMode(RESET_PIN, OUTPUT);
   pinMode(BC1_PIN, OUTPUT);
   pinMode(BDIR_PIN, OUTPUT);
+  
 
   // Set pins 0 to 7 to output
   DDRD = 0xFF;
@@ -362,27 +396,24 @@ void setup() {
  
    write_register(7, 0b1111000);
   write_register(8, 0b00001111);
-  write_register(11, env_fine(10));
-write_register(12,env_coarse(10));  
 
-wave_type(6);
 
 
  
 }
 
 void loop() {
-  // play_a(440);
-  // play_env(10);
-  // play_a(440);
-  
+play_a(key_values[36]);
+
+// for(double i = 12; i < sizeof(key_values)-12; i += 2 ){
+// delay(100);
+// play_a(i);
 
 
 
-play_a(440);
-
-
-attack(15, 20);
+// }
+adsr_mode();
+ attack(15, 20);
 decay(9, 50, 15);
 sustain(12, 30, 9);
 release(0, 200, 12);
