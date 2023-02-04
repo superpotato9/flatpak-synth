@@ -33,9 +33,27 @@ this allows control to be very simple since it it all function based
 
 
 */
-const int RESET_PIN = 8;
+
+#include <MIDI.h>
+
+// i dont know how this works but i got it from the midi lib docks and it switches the rx and tx pins to pins that aren't used by addr bus 
+#if defined(ARDUINO_SAM_DUE) || defined(SAMD_SERIES)
+   /* example not relevant for this hardware (SoftwareSerial not supported) */
+   MIDI_CREATE_DEFAULT_INSTANCE();
+#else
+   #include <SoftwareSerial.h>
+   using Transport = MIDI_NAMESPACE::SerialMIDI<SoftwareSerial>;
+   int rxPin = 10;
+   int txPin = 11;
+   SoftwareSerial mySerial = SoftwareSerial(rxPin, txPin);
+   Transport serialMIDI(mySerial);
+   MIDI_NAMESPACE::MidiInterface<Transport> MIDI((Transport&)serialMIDI);
+#endif
+
+const int RESET_PIN = 8;// address bus etc stuff
 const int BC1_PIN = A5;
 const int BDIR_PIN = A4;
+int cur_play = -1; //the note that is currently being played
 
 /* this code block handels all input systems 
 there are 3 main input blocks:
@@ -52,7 +70,11 @@ there are 3 main input blocks:
 
 // each key is +1 half step above the last and each from c0 to c8 are stored here as bools theirfor notes can be found by doing octave * 12 + steps above
 //array of notes spanning from c0 to b8
-double key_values[] = { 16.35, 17.32, 18.35, 19.45, 20.6, 21.83, 23.12, 24.5, 25.96, 27.5, 29.14, 30.87, 32.7, 34.65, 36.71, 38.89, 41.2, 43.65,
+
+
+// midi 21 = 27.50 hz | min
+// midi 119 = 7902 hz | max
+double key_values[] = { 27.5, 29.14, 30.87, 32.7, 34.65, 36.71, 38.89, 41.2, 43.65,
                         46.25, 49.0, 51.91, 55.0, 58.27, 61.74, 65.41, 69.3, 73.42, 77.78, 82.41, 87.31, 92.5, 98.0, 103.83, 110.0, 116.54, 123.47, 130.81, 138.59, 146.83,
                         155.56, 164.81, 174.61, 185.0, 196.0, 207.65, 220.0, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.0, 415.3, 440.0, 466.16,
                         493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61, 880.0, 932.33, 987.77, 1046.5, 1108.73, 1174.66, 1244.51, 1318.51, 1396.91,
@@ -71,6 +93,37 @@ double key_values[] = { 16.35, 17.32, 18.35, 19.45, 20.6, 21.83, 23.12, 24.5, 25
 it is worth noting that the tp, period, fine, and coarse functions are all used to create the notes this is done through some basic algebra that can be found in the docs for the ay
 
 */
+
+byte note_midi;
+void handleNoteOn(byte channel, byte pitch, byte velocity) //this is called when a key is pressed on piano
+{
+  note_midi = pitch;
+ 
+  digitalWrite(13, HIGH); 
+  note_midi = pitch;
+   play_c(key_values[pitch-21]);
+
+    // Do whatever you want when a note is pressed.
+
+    // Try to keep your callbacks short (no delays ect)
+    // otherwise it would slow down the loop() and have a bad impact
+    // on real-time performance.
+    //  play_a(key_values[(int)note_midi-21]);
+     
+     
+ 
+}
+
+void handleNoteOff(byte channel, byte pitch, byte velocity) //called when key is depressed on piano
+{
+  
+  // play_env(0);
+  play_c(0);
+digitalWrite(13, LOW);    // Do something when the note is released.
+    // Note that NoteOn messages with 0 velocity are interpreted as NoteOffs.
+}
+
+
 
 
 
@@ -285,7 +338,7 @@ void adsr_mode() {  // this is not strictly nessecary but very useful bc it disa
   write_register(9, 0b00000000);
   write_register(10, 0b00000000);
 }
-int level = 15; //the max ampltiude value 
+int level = 15;           //the max ampltiude value
 void attack(int steps) {  //attacks   level is how high to go max 15 steps is how many steps up each time
   for (int i = 0; i < level; i++) {
     write_register(8, 0b0000 + i);
@@ -311,7 +364,7 @@ void decay(int steps, int sustain_level) {  //decay  level is how high to go max
 // }
 
 
-void release(int steps ,int sustain_level) {
+void release(int steps, int sustain_level) {
   for (int i = sustain_level; i > 0; i--) {
 
     write_register(8, 0b0000 + i);
@@ -321,7 +374,15 @@ void release(int steps ,int sustain_level) {
   }
 }
 void setup() {
+  pinMode(13, OUTPUT);//led pin
+  digitalWrite(13, LOW);
+  MIDI.setHandleNoteOn(handleNoteOn);  // Put only the name of the function
 
+    // Do the same for NoteOffs
+    MIDI.setHandleNoteOff(handleNoteOff);
+
+    // Initiate MIDI communications, listen to all channels
+    MIDI.begin(MIDI_CHANNEL_OMNI);
 
   pinMode(14, INPUT_PULLUP);
   pinMode(15, INPUT_PULLUP);
@@ -353,25 +414,131 @@ void setup() {
 
   write_register(7, 0b1111000);
   write_register(8, 0b00001111);
+  // play_a(key_values[46]);
+  MIDI.read();
+  play_a(440);
+ adsr_mode();
+ 
 }
+unsigned long time_now = 0;
+int counter = 0;//counts up so the adsr can function
+char step = 'a'; // checks what step we are on between atk , dec , sus, rel
+
+
+int attack_time = 30;
+int sustain_level = 12;
+int decay_time = 90;
+int release_time = 200;
+int i = 0;
+
 
 void loop() {
-  play_a(key_values[78]);
+  
+  
+  // write_register(8, 0b0000 + 15);
+  
+  MIDI.read();
+     
+  
 
-  // for(double i = 12; i < sizeof(key_values)-12; i += 2 ){
-  // delay(100);
-  // play_a(i);
+//  adsr_mode();
 
 
+  
 
+
+  // attack(30);
+  
+  if(step == 'a'){ // attack mode 
+    
+  // for (int i = 0; i < 15; i++) { // i is being compared to level aka max ampltude
+  if(millis() > time_now+attack_time ){ // sees if enough time has passed 
+    time_now = millis();
+    
+   
+    write_register(8, 0b0000 + i);   //writes the ampltiudes to all 3 registers 
+    write_register(9, 0b0000 + i);
+    write_register(10, 0b0000 + i);
+    i++;
+  }
+
+if (i == 15){ // if i == max value then reset i  and move on to decay
+
+      step = 'd';
+      i = 15;   
+    }   
+
+  }
+
+  if(step == 'd'){ //decay mode
+ 
+  if(millis() > time_now+decay_time ){ // sees if enough time has passed 
+    time_now = millis();
+    
+   
+    write_register(8, 0b0000 + i);   //writes the ampltiudes to all 3 registers 
+    write_register(9, 0b0000 + i);
+    write_register(10, 0b0000 + i);
+    i--;
+  }
+
+if (i > sustain_level){ // if i == min value then reset i  and move on to decay
+
+      step = 's';
+      i = sustain_level;
+      
+    }   
+  }
+
+  if(step == 's'){
+//it just plays dont do anything   
+// delay(300) ;
+step  = 'r';
+  }
+
+  if(step == 'r'){
+
+  if(millis() > time_now+release_time ){ // sees if enough time has passed 
+    time_now = millis();
+    
+   
+    write_register(8, 0b0000 + i);   //writes the ampltiudes to all 3 registers 
+    write_register(9, 0b0000 + i);
+    write_register(10, 0b0000 + i);
+    i--;
+  }
+
+if (i == 0){ // if i == min value then reset i  and move on to decay
+
+      step = 'a';
+      i = 0;   
+    }   
+  }
+      
+
+      
+  
+  // decay(14,10);
+  // for (int i = 15; i > 10; i--) { // goes down to sustain level
+  //   write_register(8, 0b0000 + i);
+  //   write_register(9, 0b0000 + i);
+  //   write_register(10, 0b0000 + i);
+  //   delay(14);  // if set to 0 would go up instalty
   // }
-  adsr_mode();
-  attack(100);
-  decay(50, 12);
+  // delay(500); //basically do nothing until release
+  // for (int i = 10; i > 0; i--) {
 
-  release(200, 12);
+  //   write_register(8, 0b0000 + i);
+  //   write_register(9, 0b0000 + i);
+  //   write_register(10, 0b0000 + i);
+  //   delay(30);  // if set to 0 would go up instalty
+  // }
 
 
+  
+  // adsr_mode();
+  // attack(100);
+  // decay(50, 12);
 
-
+  // release(200, 12);
 }
