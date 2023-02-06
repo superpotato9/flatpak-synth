@@ -14,9 +14,4 @@ limitations/ non supported features:
 
 how it works:
 
-the code works through functions sending instructions to the ay this is done because the ay is a state machine and thus does not require constant stream of commands
-because of this 
-notes are chosen then modifiers like envlope or adsr are added on top 
-this allows control to be very simple since it it all function based 
-
-
+uses interrupts to store midi on offs and plays them whenever the program gets around to it 
