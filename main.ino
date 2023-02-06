@@ -26,8 +26,9 @@ the code works through functions and sending instructions to the ay this is done
 will play whatever note it is last given
 because of this 
 notes are chosen then modifiers like envlope or adsr are added on top 
-this allows control to be very simple since it it all function based 
+this allows control to be very simple since it it all function based (excluding adsr which runs in main loop)
 
+the midi works via a queue of notes and and interruots when the notes are sent
 
 
 
@@ -302,36 +303,6 @@ void wave_type(int type)  // takes an int as a representation of different waves
 
 
 
-/* 
-this block of wonderous code is the adr functions for controlling amplitude 
-the steps controls how long each step is normally the size of a step would be controlled but since integers cannot be used here
-instead the length of each is used
-
-and finally the level of the previous function is needed to set the the starting point this is not present on the attack because it is the start of the entire adr 
-the release function ends once the value of it reaches 0 or its min value
-* the steps is in ms 
-* all values are 4 bit ints and thus have a cap of 15
-
-
-basic use is:
-  adsr_mode();
-
-
-  play_a(440);
-
-
-  attack(30);
-  decay(14);
-
-  release(0, 500, 9);
-
-
-
-note that this will loop unless properly stopped
-
-you might also note that there is not sustain function this is because decay takes care of it 
-*/
-
 
 void adsr_mode() {  // this is not strictly nessecary but very useful bc it disabled envlope on all channels
   write_register(8, 0b00000000);
@@ -448,6 +419,18 @@ void loop() {
 
 
   // attack(30);
+   /* 
+this block of wonderous code is the adsr functions for controlling amplitude 
+the steps controls how long each step is normally the size of a step would be controlled but since integers cannot be used here
+instead the length of each is used
+
+and finally the level of the previous function is needed to set the the starting point this is not present on the attack because it is the start of the entire adr 
+the release function ends once the value of it reaches 0 or its min value
+* the steps is in ms 
+* all values are 4 bit ints and thus have a cap of 15
+
+*/
+
   
   if(step == 'a'){ // attack mode 
     
