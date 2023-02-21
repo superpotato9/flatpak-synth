@@ -57,7 +57,7 @@ there are 3 main input blocks:
 
 
 
-double key_values[] = { 27.5, 29.14, 30.87, 32.7, 34.65, 36.71, 38.89, 41.2, 43.65,
+double key_values[] = {  32.7, 34.65, 36.71, 38.89, 41.2, 43.65,
                         46.25, 49.0, 51.91, 55.0, 58.27, 61.74, 65.41, 69.3, 73.42, 77.78, 82.41, 87.31, 92.5, 98.0, 103.83, 110.0, 116.54, 123.47, 130.81, 138.59, 146.83,
                         155.56, 164.81, 174.61, 185.0, 196.0, 207.65, 220.0, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.0, 415.3, 440.0, 466.16,
                         493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61, 880.0, 932.33, 987.77, 1046.5, 1108.73, 1174.66, 1244.51, 1318.51, 1396.91,
@@ -339,8 +339,8 @@ void setup() {
   // play_a(key_values[46]);
  
  adsr_mode();
- play_a(440);
- play_b(500);
+ int cur_value = key_values[round(analogRead(A0)/17)] ;
+ play_a(cur_value);
 
 }
 unsigned long time_now = 0;
@@ -365,6 +365,13 @@ char step = 'a'; // checks what step we are on between atk , dec , sus, rel
 void loop() {
   
   
+ 
+
+  // if(cur_play != pin_val){
+  // play_a(map(pin_val, 0, 1023, 0, 99));
+  // cur_play == pin_val;    
+  // }
+
   // write_register(8, 0b0000 + 15);
   
 
@@ -376,6 +383,7 @@ void loop() {
  write_register(8, 0b0000 +15);   //writes the ampltiudes to all 3 registers 
     write_register(9, 0b0000 + 15);
     write_register(10, 0b0000 + 15);  
+    step = 'w';
 }
 
   // attack(30);
@@ -445,6 +453,9 @@ if (i == 0){ // if i == min value then reset i  and move on to decay
 
       step = 'a';
       i = 0;   
+       int cur_value = key_values[round(analogRead(A0)/17)] ; //gets curvalue of the cv pin reads its value and divdes it by 17 (the space between each note) then rounds and calls that freq
+ play_a(cur_value);
+ 
     }   
   }
 
